@@ -45,8 +45,12 @@ jobs:
 
       - name: Reconstruct and apply Stage 4 overlay
         run: |
+          wc -c stage4_payload/part*.b64
+          sha256sum stage4_payload/part*.b64
           cat stage4_payload/part*.b64 > stage4-overlay.b64
+          wc -c stage4-overlay.b64
           base64 --decode stage4-overlay.b64 > stage4-overlay.zip
+          sha256sum stage4-overlay.zip
           echo "3c0c35051009bf854ff46e48a2968244b4ac493f6e62e6ee597488a4679157d8  stage4-overlay.zip" | sha256sum -c -
           unzip -t stage4-overlay.zip
           unzip -oq stage4-overlay.zip -d project
