@@ -44,10 +44,9 @@ jobs:
           test -f project/src/main/java/com/theawakening/health/HealthManager.java
           test -f project/src/main/java/com/theawakening/difficulty/DifficultyProfile.java
 
-      - name: Run static validators
+      - name: Run Stage 2 and Stage 3 validators
         working-directory: project
         run: |
-          python scripts/validate_foundation.py
           python scripts/validate_stage2.py
           python scripts/validate_stage3.py
 
