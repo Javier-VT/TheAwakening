@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -109,6 +109,26 @@ jobs:
             echo 'ERROR: development mapping marker found; JAR does not look reobfuscated.'
             exit 1
           fi
+
+      - name: Dedicated Forge server smoke test
+        working-directory: project
+        run: |
+          mkdir -p run
+          printf 'eula=true\n' > run/eula.txt
+          set +e
+          timeout 120s gradle --no-daemon runServer --args 'nogui' > server-smoke.log 2>&1
+          EXIT_CODE=$?
+          set -e
+          cat server-smoke.log
+          if grep -Eqi 'Failed to create mod instance|ModLoadingException|Exception in server tick loop|A fatal error has been detected|FATAL' server-smoke.log; then
+            echo 'Server smoke test found a fatal Forge/mod loading error.'
+            exit 1
+          fi
+          if ! grep -Eq 'Done \([0-9.]+s\)! For help' server-smoke.log; then
+            echo "Server did not reach the ready state (timeout/exit code: $EXIT_CODE)."
+            exit 1
+          fi
+          echo 'Dedicated Forge server reached ready state successfully.'
 
       - name: Upload production JAR
         uses: actions/upload-artifact@v4
