@@ -1,0 +1,70 @@
+name: Forge Build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.8
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.8'
+
+      - name: Extract THE AWAKENING project
+        run: |
+          rm -rf project
+          mkdir project
+          unzip -q theawakening-project.zip -d project
+          if [ -d project/TheAwakening ]; then
+            shopt -s dotglob
+            mv project/TheAwakening/* project/
+            rmdir project/TheAwakening
+          fi
+
+      - name: Show project
+        working-directory: project
+        run: |
+          java -version
+          gradle --version
+          find . -maxdepth 2 -type f | sort | head -100
+
+      - name: Build with ForgeGradle
+        working-directory: project
+        run: gradle --no-daemon clean build verifyProductionJar --stacktrace
+
+      - name: Validate output
+        working-directory: project
+        run: |
+          ls -lah build/libs
+          JAR=$(find build/libs -maxdepth 1 -type f -name 'theawakening-*.jar' ! -name '*sources*' | head -1)
+          test -n "$JAR"
+          echo "Built: $JAR"
+          unzip -t "$JAR"
+          if unzip -p "$JAR" com/theawakening/registry/ModCreativeTabs.class | strings | grep -q 'CREATIVE_MODE_TAB'; then
+            echo 'ERROR: development mapping marker found; JAR does not look reobfuscated.'
+            exit 1
+          fi
+
+      - name: Upload production JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: theawakening-0.2.1-stage2-runtimefix
+          path: project/build/libs/*.jar
+          if-no-files-found: error
