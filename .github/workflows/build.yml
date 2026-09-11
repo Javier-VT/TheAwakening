@@ -27,23 +27,22 @@ jobs:
         with:
           gradle-version: '8.8'
 
-      - name: Extract THE AWAKENING project
+      - name: Reconstruct and verify project payload
         run: |
+          cat min_payload/part*.b64 > minimal-project.b64
+          base64 --decode minimal-project.b64 > minimal-project.zip
+          echo "Payload SHA-256: $(sha256sum minimal-project.zip)"
+          unzip -t minimal-project.zip
           rm -rf project
           mkdir project
-          unzip -q theawakening-project.zip -d project
-          if [ -d project/TheAwakening ]; then
-            shopt -s dotglob
-            mv project/TheAwakening/* project/
-            rmdir project/TheAwakening
-          fi
+          unzip -q minimal-project.zip -d project
 
       - name: Show project
         working-directory: project
         run: |
           java -version
           gradle --version
-          find . -maxdepth 2 -type f | sort | head -100
+          find . -maxdepth 3 -type f | sort | head -100
 
       - name: Build with ForgeGradle
         working-directory: project
@@ -57,6 +56,7 @@ jobs:
           test -n "$JAR"
           echo "Built: $JAR"
           unzip -t "$JAR"
+          unzip -l "$JAR" | grep 'META-INF/mods.toml'
           if unzip -p "$JAR" com/theawakening/registry/ModCreativeTabs.class | strings | grep -q 'CREATIVE_MODE_TAB'; then
             echo 'ERROR: development mapping marker found; JAR does not look reobfuscated.'
             exit 1
