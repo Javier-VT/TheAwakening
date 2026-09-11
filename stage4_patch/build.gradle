@@ -1,0 +1,152 @@
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+    withSourcesJar()
+}
+
+minecraft {
+    mappings channel: mapping_channel, version: mapping_version
+    copyIdeResources = true
+
+    runs {
+        configureEach {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'info'
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        client {}
+
+        server {
+            args '--nogui'
+        }
+
+        gameTestServer {}
+
+        data {
+            workingDirectory project.file('run-data')
+            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
+        }
+    }
+}
+
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+repositories {
+    // ForgeGradle supplies Forge's Maven and Maven Central as required.
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    def replaceProperties = [
+        minecraft_version: minecraft_version,
+        minecraft_version_range: minecraft_version_range,
+        forge_version: forge_version,
+        forge_version_range: forge_version_range,
+        loader_version_range: loader_version_range,
+        mod_id: mod_id,
+        mod_name: mod_name,
+        mod_license: mod_license,
+        mod_version: mod_version,
+        mod_authors: mod_authors,
+        mod_description: mod_description
+    ]
+    inputs.properties replaceProperties
+    filesMatching(['META-INF/mods.toml']) {
+        expand replaceProperties + [project: project]
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes([
+            'Specification-Title': mod_id,
+            'Specification-Vendor': mod_authors,
+            'Specification-Version': '1',
+            'Implementation-Title': project.name,
+            'Implementation-Version': project.jar.archiveVersion,
+            'Implementation-Vendor': mod_authors,
+            'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        ])
+    }
+    finalizedBy 'reobfJar'
+}
+
+tasks.named('sourcesJar', Jar).configure {
+    archiveClassifier = 'sources'
+}
+
+// Production guard: Forge 1.20.1 runtime expects the Minecraft member references
+// in the mod jar to have passed through ForgeGradle's reobfuscation pipeline.
+// This catches the exact class of failure seen when an offline/stub-compiled jar
+// is copied directly into a production Forge instance.
+tasks.register('verifyProductionJar') {
+    dependsOn 'reobfJar'
+    doLast {
+        def jarFile = tasks.named('jar', Jar).get().archiveFile.get().asFile
+        if (!jarFile.exists()) {
+            throw new GradleException("Production jar missing: ${jarFile}")
+        }
+
+        def zip = new java.util.zip.ZipFile(jarFile)
+        try {
+            def modsEntry = zip.getEntry('META-INF/mods.toml')
+            if (modsEntry == null) {
+                throw new GradleException('META-INF/mods.toml missing from production jar')
+            }
+            def modsText = zip.getInputStream(modsEntry).getText('UTF-8')
+            if (modsText.contains('${')) {
+                throw new GradleException('mods.toml still contains unexpanded Gradle placeholders')
+            }
+
+            def tabEntry = zip.getEntry('com/theawakening/registry/ModCreativeTabs.class')
+            if (tabEntry == null) {
+                throw new GradleException('ModCreativeTabs.class missing from production jar')
+            }
+            ['com/theawakening/revive/ReviveManager.class',
+             'com/theawakening/revive/ReviveEvents.class',
+             'com/theawakening/death/DeathEchoManager.class',
+             'com/theawakening/network/packet/ReviveIntentPacket.class'].each { requiredClass ->
+                if (zip.getEntry(requiredClass) == null) {
+                    throw new GradleException(requiredClass + ' missing from Stage 4 production jar')
+                }
+            }
+            byte[] tabBytes = zip.getInputStream(tabEntry).bytes
+            String raw = new String(tabBytes, java.nio.charset.StandardCharsets.ISO_8859_1)
+            if (raw.contains('CREATIVE_MODE_TAB')) {
+                throw new GradleException(
+                    'Jar still contains Mojang development member CREATIVE_MODE_TAB. ' +
+                    'Do not distribute an offline/stub-compiled jar; run ForgeGradle reobfJar/build.'
+                )
+            }
+        } finally {
+            zip.close()
+        }
+        logger.lifecycle("Verified reobfuscated production jar: ${jarFile}")
+    }
+}
+
+tasks.named('build').configure {
+    finalizedBy 'verifyProductionJar'
+}
