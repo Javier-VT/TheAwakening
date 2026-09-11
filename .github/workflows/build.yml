@@ -31,7 +31,6 @@ jobs:
         run: |
           cat min_payload/part*.b64 > minimal-project.b64
           base64 --decode minimal-project.b64 > minimal-project.zip
-          echo "Baseline payload SHA-256: $(sha256sum minimal-project.zip)"
           unzip -t minimal-project.zip
           rm -rf project
           mkdir project
@@ -43,29 +42,39 @@ jobs:
           test -f project/src/main/java/com/theawakening/health/HealthManager.java
           test -f project/src/main/java/com/theawakening/difficulty/DifficultyProfile.java
 
-      - name: Apply Stage 4 source overlay
+      - name: Apply Stage 4 overlay
         run: |
           cp -a stage4_patch/. project/
-          grep '^mod_version=' project/gradle.properties
           test -f project/src/main/java/com/theawakening/revive/ReviveManager.java
-          test -f project/src/main/java/com/theawakening/revive/ReviveEvents.java
           test -f project/src/main/java/com/theawakening/death/DeathEchoManager.java
-          test -f project/src/main/java/com/theawakening/network/packet/ReviveIntentPacket.java
-          test -f project/src/main/java/com/theawakening/client/ClientReviveInput.java
 
-      - name: Run Stage 2 through Stage 4 validators
+      - name: Apply Stage 5 overlay
+        run: |
+          echo "5d519b7903af3bbe5cf71afefded59198b14d841d285f452a9bcc0820979e741  stage5_payload/stage5_overlay.zip" | sha256sum -c -
+          unzip -t stage5_payload/stage5_overlay.zip
+          unzip -oq stage5_payload/stage5_overlay.zip -d project
+          grep '^mod_version=' project/gradle.properties
+          test -f project/src/main/java/com/theawakening/food/WellFedEffect.java
+          test -f project/src/main/java/com/theawakening/potion/ModPotions.java
+          test -f project/src/main/java/com/theawakening/potion/BrewingManager.java
+
+      - name: Run Stage 2 through Stage 5 validators
         working-directory: project
         run: |
+          python scripts/generate_stage5_assets.py
           python scripts/validate_stage2.py
           python scripts/validate_stage3.py
           python scripts/validate_stage4.py
+          python scripts/validate_stage5.py
 
-      - name: Show Stage 4 project
+      - name: Show Stage 5 project
         working-directory: project
         run: |
           java -version
           gradle --version
-          find src/main/java/com/theawakening/revive src/main/java/com/theawakening/death -type f | sort
+          find src/main/java/com/theawakening/food src/main/java/com/theawakening/potion -type f | sort
+          echo "Recipes: $(find src/main/resources/data/theawakening/recipes -type f -name '*.json' | wc -l)"
+          echo "Item textures: $(find src/main/resources/assets/theawakening/textures/item -type f -name '*.png' | wc -l)"
 
       - name: Build with ForgeGradle
         working-directory: project
@@ -75,16 +84,19 @@ jobs:
         working-directory: project
         run: |
           ls -lah build/libs
-          JAR=$(find build/libs -maxdepth 1 -type f -name 'theawakening-0.4.0-stage4.jar' | head -1)
+          JAR=$(find build/libs -maxdepth 1 -type f -name 'theawakening-0.5.0-stage5.jar' | head -1)
           test -n "$JAR"
-          echo "Built: $JAR"
           unzip -t "$JAR"
           unzip -l "$JAR" | grep 'META-INF/mods.toml'
-          unzip -l "$JAR" | grep 'com/theawakening/revive/ReviveManager.class'
-          unzip -l "$JAR" | grep 'com/theawakening/revive/ReviveEvents.class'
-          unzip -l "$JAR" | grep 'com/theawakening/death/DeathEchoManager.class'
-          unzip -l "$JAR" | grep 'com/theawakening/network/packet/ReviveIntentPacket.class'
-          unzip -l "$JAR" | grep 'com/theawakening/client/ClientReviveInput.class'
+          unzip -l "$JAR" | grep 'com/theawakening/food/WellFedEffect.class'
+          unzip -l "$JAR" | grep 'com/theawakening/food/WellFedSupport.class'
+          unzip -l "$JAR" | grep 'com/theawakening/potion/ModPotions.class'
+          unzip -l "$JAR" | grep 'com/theawakening/potion/BrewingManager.class'
+          unzip -l "$JAR" | grep 'com/theawakening/potion/AwakeningBrewingRecipe.class'
+          unzip -l "$JAR" | grep 'data/theawakening/recipes/hearth_stew.json'
+          unzip -l "$JAR" | grep 'assets/theawakening/textures/mob_effect/well_fed.png'
+          COUNT=$(unzip -l "$JAR" | grep 'assets/theawakening/textures/item/.*\.png' | wc -l)
+          test "$COUNT" -ge 23
           if unzip -p "$JAR" com/theawakening/registry/ModCreativeTabs.class | strings | grep -q 'CREATIVE_MODE_TAB'; then
             echo 'ERROR: development mapping marker found; JAR does not look reobfuscated.'
             exit 1
@@ -93,6 +105,6 @@ jobs:
       - name: Upload production JAR
         uses: actions/upload-artifact@v4
         with:
-          name: theawakening-0.4.0-stage4
+          name: theawakening-0.5.0-stage5
           path: project/build/libs/*.jar
           if-no-files-found: error
