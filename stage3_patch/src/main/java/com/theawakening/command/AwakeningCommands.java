@@ -88,7 +88,7 @@ public final class AwakeningCommands {
                 .then(Commands.literal("sync")
                     .requires(source -> source.hasPermission(2))
                     .then(Commands.argument("player", EntityArgument.player())
-                        .executes(context -> syncPlayer(context.getSource(), EntityArgument.getPlayer(context, "player"))))))));
+                        .executes(context -> syncPlayer(context.getSource(), EntityArgument.getPlayer(context, "player")))))));
     }
 
     private static int getPhase(CommandSourceStack source) {
