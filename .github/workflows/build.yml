@@ -48,17 +48,20 @@ jobs:
           test -f project/src/main/java/com/theawakening/revive/ReviveManager.java
           test -f project/src/main/java/com/theawakening/death/DeathEchoManager.java
 
-      - name: Apply Stage 5 overlay
+      - name: Apply Stage 5 source overlay
         run: |
-          echo "5d519b7903af3bbe5cf71afefded59198b14d841d285f452a9bcc0820979e741  stage5_payload/stage5_overlay.zip" | sha256sum -c -
-          unzip -t stage5_payload/stage5_overlay.zip
-          unzip -oq stage5_payload/stage5_overlay.zip -d project
+          cat stage5_source_payload/part*.b64 > stage5-source.b64
+          base64 --decode stage5-source.b64 > stage5-source.zip
+          echo "603b9641e29e764f0c1db82c6107b871c47753d90b31581f260e5ba975431eca  stage5-source.zip" | sha256sum -c -
+          unzip -t stage5-source.zip
+          unzip -oq stage5-source.zip -d project
           grep '^mod_version=' project/gradle.properties
           test -f project/src/main/java/com/theawakening/food/WellFedEffect.java
           test -f project/src/main/java/com/theawakening/potion/ModPotions.java
           test -f project/src/main/java/com/theawakening/potion/BrewingManager.java
+          test -f project/scripts/generate_stage5_assets.py
 
-      - name: Run Stage 2 through Stage 5 validators
+      - name: Generate Stage 5 resources and validate Stage 2 through Stage 5
         working-directory: project
         run: |
           python scripts/generate_stage5_assets.py
