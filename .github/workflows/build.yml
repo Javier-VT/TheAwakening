@@ -50,10 +50,11 @@ jobs:
 
       - name: Apply Stage 5 source overlay
         run: |
-          wc -c stage5_source_payload/part*.b64
+          # The connector has historically mutated the ZIP extra-field Base64 token YVVU -> YXVU
+          # in later text chunks. Normalize only the affected chunks, then enforce the full source ZIP SHA.
+          sed -i 's/YXVU/YVVU/g' stage5_source_payload/part05.b64 stage5_source_payload/part06.b64 stage5_source_payload/part07.b64
           sha256sum stage5_source_payload/part*.b64
           cat stage5_source_payload/part*.b64 > stage5-source.b64
-          wc -c stage5-source.b64
           base64 --decode stage5-source.b64 > stage5-source.zip
           sha256sum stage5-source.zip
           echo "603b9641e29e764f0c1db82c6107b871c47753d90b31581f260e5ba975431eca  stage5-source.zip" | sha256sum -c -
