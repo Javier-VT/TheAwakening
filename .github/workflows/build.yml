@@ -43,18 +43,15 @@ jobs:
           test -f project/src/main/java/com/theawakening/health/HealthManager.java
           test -f project/src/main/java/com/theawakening/difficulty/DifficultyProfile.java
 
-      - name: Reconstruct and apply Stage 4 overlay
+      - name: Apply Stage 4 source overlay
         run: |
-          sed -i 's/YXVUBQ/YVVUBQ/g' stage4_payload/part09.b64 stage4_payload/part10.b64
-          cat stage4_payload/part*.b64 > stage4-overlay.b64
-          base64 --decode stage4-overlay.b64 > stage4-overlay.zip
-          echo "3c0c35051009bf854ff46e48a2968244b4ac493f6e62e6ee597488a4679157d8  stage4-overlay.zip" | sha256sum -c -
-          unzip -t stage4-overlay.zip
-          unzip -oq stage4-overlay.zip -d project
+          cp -a stage4_patch/. project/
           grep '^mod_version=' project/gradle.properties
           test -f project/src/main/java/com/theawakening/revive/ReviveManager.java
+          test -f project/src/main/java/com/theawakening/revive/ReviveEvents.java
           test -f project/src/main/java/com/theawakening/death/DeathEchoManager.java
           test -f project/src/main/java/com/theawakening/network/packet/ReviveIntentPacket.java
+          test -f project/src/main/java/com/theawakening/client/ClientReviveInput.java
 
       - name: Run Stage 2 through Stage 4 validators
         working-directory: project
@@ -87,6 +84,7 @@ jobs:
           unzip -l "$JAR" | grep 'com/theawakening/revive/ReviveEvents.class'
           unzip -l "$JAR" | grep 'com/theawakening/death/DeathEchoManager.class'
           unzip -l "$JAR" | grep 'com/theawakening/network/packet/ReviveIntentPacket.class'
+          unzip -l "$JAR" | grep 'com/theawakening/client/ClientReviveInput.class'
           if unzip -p "$JAR" com/theawakening/registry/ModCreativeTabs.class | strings | grep -q 'CREATIVE_MODE_TAB'; then
             echo 'ERROR: development mapping marker found; JAR does not look reobfuscated.'
             exit 1
